@@ -41,6 +41,9 @@ class Budget:
 
         # Get budgets
         self.budget_list = load_all_budget_json_from_folder(folder_path_list)
+        self.total_yearly_amount = 0.0
+        self.active_calcs = {}
+        self.calculate_inverval_amounts()
         # for path in folder_path_list:
         #     self.budget_list.append(self.handle_json(path))
 
@@ -52,11 +55,19 @@ class Budget:
         pass
 
     def create_main_header(self):
-        return ["Date", "Item", "Total", "Paid", "W/Total", "W/Paid"]
+        return ["Date", "Item", "Total", "Paid", "W/Total", "W/Paid", "W/To Be Paid"]
 
     def create_week_header_row(self, row_num, sub_row_count, week):
         start_date = week.start_date
         end_date = week.end_date
+
+        active_calcs_string = []
+        for k in self.active_calcs:
+            calc = (
+                "" if self.active_calcs[k] == 52 else f"* {self.active_calcs[k]} / 52"
+            )
+            active_calcs_string.append(f"({k} {calc})")
+
         new_header_row = [
             f'=TEXT(DATE({start_date.year}, {start_date.month}, {start_date.day}), "DD/MM/YYYY") & " - " & TEXT(DATE({end_date.year}, {end_date.month}, {end_date.day}), "DD/MM/YYYY")',
             "",
@@ -64,6 +75,9 @@ class Budget:
             "",
             f"=SUM(C{row_num + 1}:C{row_num + sub_row_count})",
             f"=SUMIF(D{row_num + 1}:D{row_num + sub_row_count}, TRUE, C{row_num + 1}:C{row_num + sub_row_count})",
+            f"=SUM({self.total_yearly_amount / 52},"
+            + ",".join(active_calcs_string)
+            + ")",
         ]
         return new_header_row
 
@@ -241,6 +255,36 @@ class Budget:
             rows += data_rows_for_week
             row_count += sub_row_count
         self.csv_rows = rows
+
+    def calculate_inverval_amounts(self):
+        total_yearly_amount = 0
+        active_calcs = {}
+        for budget in self.budget_list:
+            for item in budget["items"]:
+                print(item)
+                interval_type = item["interval"]
+                if interval_type == "weekly":
+                    if type(item["amount"]) == str:
+                        active_calcs[item["cell"]] = 52
+                    else:
+                        total_yearly_amount += item["amount"] * 52
+                elif interval_type == "monthly":
+                    if type(item["amount"]) == str:
+                        active_calcs[item["cell"]] = 12
+                    else:
+                        total_yearly_amount += item["amount"] * 12
+                elif interval_type == "quarterly":
+                    if type(item["amount"]) == str:
+                        active_calcs[item["cell"]] = 4
+                    else:
+                        total_yearly_amount += item["amount"] * 4
+                elif interval_type == "yearly":
+                    if type(item["amount"]) == str:
+                        active_calcs[item["cell"]] = 1
+                    else:
+                        total_yearly_amount += item["amount"]
+        self.total_yearly_amount = total_yearly_amount
+        self.active_calcs = active_calcs
 
 
 # new_budget = Budget(
